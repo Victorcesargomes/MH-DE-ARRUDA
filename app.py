@@ -282,12 +282,46 @@ html, body, [data-testid="stAppViewContainer"] {
     padding: 24px;
     margin-top: 8px;
 }
-[data-testid="stChatMessage"] {
+/* Mensagem do usuário */
+[data-testid="stChatMessage"][data-testid="stChatMessage"] {
     background: transparent !important;
-    border-bottom: 1px solid var(--border) !important;
-    padding: 14px 0 !important;
+    padding: 10px 4px !important;
 }
-[data-testid="stChatMessage"]:last-child { border-bottom: none !important; }
+
+/* Balão da IA */
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
+    background: #1a2035 !important;
+    border: 1px solid #253050 !important;
+    border-radius: 12px !important;
+    padding: 14px 18px !important;
+    margin: 6px 0 !important;
+}
+
+/* Balão do usuário */
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+    background: #0f1e38 !important;
+    border: 1px solid #1e3a5f !important;
+    border-radius: 12px !important;
+    padding: 14px 18px !important;
+    margin: 6px 0 !important;
+}
+
+/* Texto das mensagens — força cor clara */
+[data-testid="stChatMessage"] p,
+[data-testid="stChatMessage"] li,
+[data-testid="stChatMessage"] span,
+[data-testid="stChatMessage"] div {
+    color: #e8edf5 !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 0.92rem !important;
+    line-height: 1.65 !important;
+}
+
+/* Negrito dentro das mensagens */
+[data-testid="stChatMessage"] strong {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
 
 [data-testid="stChatInputContainer"] {
     background: var(--bg-surface) !important;
