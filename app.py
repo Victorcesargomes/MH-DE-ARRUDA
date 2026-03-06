@@ -29,6 +29,11 @@ LOGO_PATH = BASE_PATH / "logoo.png"
 CLIENT_NAME = "MH de Arruda"
 MODEL_NAME = "llama-3.3-70b-versatile"
 
+# ── Limites de consumo de tokens ──────────────────────────────────────────────
+MAX_HISTORICO_MSGS = 12   # Era 40 — reduz reenvio do histórico
+MAX_LINHAS_CSV     = 30   # Era 200 — reduz dados brutos no prompt
+# ──────────────────────────────────────────────────────────────────────────────
+
 load_dotenv()
 API_KEY = os.getenv("GROQ_API_KEY")
 CONTABIL_API_URL = os.getenv("CONTABIL_API_URL")
@@ -309,7 +314,7 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 [data-testid="stChatMessage"] strong { color: #ffffff !important; font-weight: 600 !important; }
 
-/* ── Input do chat — cobre todos os wrappers internos ── */
+/* ── Input do chat ── */
 .stChatInputContainer,
 div.stChatInputContainer,
 div.stChatInputContainer > div,
@@ -385,14 +390,11 @@ div[data-testid="stTabs"] [aria-selected="true"] {
     font-family: 'DM Sans', sans-serif !important;
 }
 
-/* Hide default streamlit header decoration */
 [data-testid="stDecoration"] { display: none !important; }
 #MainMenu, footer, header { visibility: hidden !important; }
 
-/* Divider */
 hr { border-color: var(--border) !important; margin: 28px 0 !important; }
 
-/* Sidebar buttons */
 [data-testid="stSidebar"] .stButton > button {
     width: 100%;
     background: rgba(30,40,64,0.8) !important;
@@ -405,7 +407,6 @@ hr { border-color: var(--border) !important; margin: 28px 0 !important; }
     background: rgba(59,130,246,0.1) !important;
 }
 
-/* Success/Warning/Info boxes */
 [data-testid="stAlert"] {
     background: var(--bg-card) !important;
     border-color: var(--border-light) !important;
@@ -413,7 +414,6 @@ hr { border-color: var(--border) !important; margin: 28px 0 !important; }
     color: var(--text-primary) !important;
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg-base); }
 ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 10px; }
@@ -517,19 +517,52 @@ def filtrar_por_periodo(df: pd.DataFrame, data_inicio: datetime, data_fim: datet
     ]
 
 
-def df_para_prompt(df: pd.DataFrame) -> str:
+# ─── OTIMIZADO: envia resumo agregado + apenas N linhas recentes ─────────────
+def df_para_prompt(df: pd.DataFrame, max_linhas: int = MAX_LINHAS_CSV) -> str:
+    """
+    Em vez de enviar centenas de linhas brutas, envia:
+    1. Resumo agregado por mês
+    2. Últimas N linhas para detalhamento pontual
+    Reduz drasticamente o consumo de tokens sem perder contexto útil.
+    """
     if df.empty:
         return "Nenhum dado disponível."
+
+    linhas = []
+
+    # ── 1. Resumo mensal agregado ──────────────────────────────────────────
+    if "data" in df.columns:
+        df2 = df.copy()
+        df2["mes"] = df2["data"].dt.to_period("M").astype(str)
+        agg = df2.groupby("mes")[["faturamento", "despesa", "lucro"]].sum()
+        linhas.append("=== Resumo Mensal ===")
+        linhas.append(agg.to_string())
+        linhas.append("")
+
+    # ── 2. Top 5 despesas do período ──────────────────────────────────────
+    if "descricao" in df.columns and df["despesa"].sum() > 0:
+        top = (
+            df[df["despesa"] > 0]
+            .groupby("descricao")["despesa"]
+            .sum()
+            .nlargest(5)
+        )
+        linhas.append("=== Top 5 Despesas ===")
+        linhas.append(top.to_string())
+        linhas.append("")
+
+    # ── 3. Últimas N linhas para detalhes pontuais ─────────────────────────
     df_display = df.copy()
     for col in ("faturamento", "despesa", "lucro"):
         if col in df_display.columns:
             df_display[col] = df_display[col].apply(
                 lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             )
-    MAX_LINHAS = 200
-    if len(df_display) > MAX_LINHAS:
-        df_display = df_display.tail(MAX_LINHAS)
-    return df_display.to_csv(index=False, sep=";")
+    linhas.append(f"=== Últimas {max_linhas} transações ===")
+    linhas.append(df_display.tail(max_linhas).to_csv(index=False, sep=";"))
+
+    return "\n".join(linhas)
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 dados_df_completo = carregar_df(CSV_PATH)
@@ -653,13 +686,12 @@ def plot_barras_mensais(df: pd.DataFrame):
     if len(ag) < 2:
         return None
 
-    # customdata com os 3 valores formatados por linha do agrupado
     import numpy as np
     cd = np.stack([
         ag["faturamento"].values,
         ag["despesa"].values,
         ag["lucro"].values,
-    ], axis=1)  # shape (n_meses, 3)
+    ], axis=1)
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
@@ -775,8 +807,9 @@ def adicionar_mensagem(role: str, conteudo: str) -> None:
     historico = get_historico()
     msg = HumanMessage(content=conteudo) if role == "human" else AIMessage(content=conteudo)
     historico.append(msg)
-    if len(historico) > 40:
-        st.session_state["historico"] = historico[-40:]
+    # ── OTIMIZADO: limite reduzido de 40 → MAX_HISTORICO_MSGS ────────────────
+    if len(historico) > MAX_HISTORICO_MSGS:
+        st.session_state["historico"] = historico[-MAX_HISTORICO_MSGS:]
 
 
 def limpar_historico() -> None:
@@ -798,45 +831,31 @@ def _criar_chain(llm: ChatGroq, df_filtrado: pd.DataFrame, data_inicio, data_fim
     analise     = analisar_financas(df_filtrado)
     periodo_str = f"{data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}"
 
+    # ── OTIMIZADO: system prompt enxuto — sem repetição de dados já calculados
     system_message = f"""
-Você é Victor, assistente virtual da empresa de Reciclagem \"{CLIENT_NAME}\" de Matheus e Márcia.
-Fale **sempre** em português brasileiro, de forma clara e objetiva.
-Ignore qualquer texto entre as tags <think> e </think>; trate-o como nota interna.
-Você interage exclusivamente com Matheus ou Márcia, donos da empresa MH de Arruda.
-Antes de iniciar a conversa, pergunte com quem está falando.
+Você é Victor, assistente virtual da empresa de Reciclagem \"{CLIENT_NAME}\" (Matheus e Márcia).
+Fale sempre em português brasileiro, de forma clara e objetiva.
+Ignore qualquer texto entre <think> e </think>.
+Você interage exclusivamente com Matheus ou Márcia. Pergunte com quem está falando no início.
 
-**DIRETRIZES DE RESPOSTA:**
-1. Seja conciso. Evite textos longos quando a pergunta for simples.
-2. Para perguntas objetivas, responda em no máximo 2 frases.
-3. Para perguntas sobre valores financeiros, mostre apenas os números relevantes.
-4. Para pedidos de certidões, forneça imediatamente o link de download.
-5. Use negrito apenas para valores numéricos importantes.
+**DIRETRIZES:**
+1. Seja conciso. Perguntas simples → máximo 2 frases.
+2. Para valores financeiros, mostre apenas os números relevantes.
+3. Para certidões, forneça imediatamente o link de download.
+4. Use negrito apenas para valores numéricos importantes.
+5. Não repita os dados do contexto nas respostas — o usuário já os vê no dashboard.
 
-**Resumo financeiro do período {periodo_str}**:
-- **Faturamento acumulado:** R$ {faturamento:,.2f}
-- **Despesa acumulada:** R$ {despesa:,.2f}
-- **Lucro acumulado:** R$ {lucro:,.2f}
-
-**Análise detalhada**:
-- **Top 5 despesas**:
-{analise['top_despesas'].to_string(index=False) if not analise['top_despesas'].empty else 'Nenhuma despesa registrada'}
-- **Faturamento médio diário**: R$ {analise['faturamento_medio_diario']:,.2f}
-- **Margem de lucro**: {analise['margem_lucro']:.2f}%
-- **Principais despesas recorrentes**:
-{analise['despesas_recorrentes'].to_string() if not analise['despesas_recorrentes'].empty else 'Nenhuma despesa recorrente'}
+**Período: {periodo_str}**
+- Faturamento: **R$ {faturamento:,.2f}**
+- Despesa:     **R$ {despesa:,.2f}**
+- Lucro:       **R$ {lucro:,.2f}**
+- Margem:      **{(lucro/faturamento*100) if faturamento > 0 else 0:.1f}%**
+- Fat. médio/dia: R$ {analise['faturamento_medio_diario']:,.2f}
 
 Certidões disponíveis: {', '.join(CERTIDOES.keys()) or 'nenhuma'}
 
-Base de dados detalhada (período {periodo_str}):
-###
+**Dados do período (resumo + últimas transações):**
 {df_para_prompt(df_filtrado)}
-###
-
-- As colunas correspondem a `Data`, `Faturamento`, `Despesa`, `Descrição` e `Lucro`.
-- Todos os valores estão em Reais (BRL).
-
-Se precisar de uma certidão, basta pedir — exemplos: "quero a CND estadual", "quero a CND FGTS".
-Termine sempre perguntando se precisa de algo mais.
 """
     prompt_template = ChatPromptTemplate.from_messages([
         ("system", system_message),
@@ -941,7 +960,9 @@ def desenhar_sidebar(llm: ChatGroq) -> None:
                 f'<div style="margin-top:20px;font-size:0.75rem;color:#3d4f6e;line-height:1.7">'
                 f'Modelo: <span style="color:#7a8aaa">{MODEL_NAME}</span><br>'
                 f'Linhas CSV: <span style="color:#7a8aaa">{len(dados_df_completo)}</span><br>'
-                f'Certidões: <span style="color:#7a8aaa">{len(CERTIDOES)}</span>'
+                f'Certidões: <span style="color:#7a8aaa">{len(CERTIDOES)}</span><br>'
+                f'Histórico: <span style="color:#7a8aaa">máx. {MAX_HISTORICO_MSGS} msgs</span><br>'
+                f'Contexto: <span style="color:#7a8aaa">máx. {MAX_LINHAS_CSV} linhas</span>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -976,7 +997,6 @@ def desenhar_sidebar(llm: ChatGroq) -> None:
 ###########################
 
 def pagina_chat(llm: ChatGroq) -> None:
-    # ─── Header ───────────────────────────────────────────────────────────────
     hoje = datetime.now().strftime("%d/%m/%Y")
     st.markdown(
         f"""
@@ -991,7 +1011,6 @@ def pagina_chat(llm: ChatGroq) -> None:
         unsafe_allow_html=True,
     )
 
-    # ─── Validação de datas ───────────────────────────────────────────────────
     datas_validas = (
         dados_df_completo["data"].dropna()
         if not dados_df_completo.empty and "data" in dados_df_completo.columns
@@ -1004,7 +1023,6 @@ def pagina_chat(llm: ChatGroq) -> None:
     min_date = datas_validas.min().to_pydatetime().date()
     max_date = datas_validas.max().to_pydatetime().date()
 
-    # ─── Abas principais ──────────────────────────────────────────────────────
     tab_visao, tab_comparativo, tab_chat = st.tabs([
         "  Visão Geral  ", "  Comparativo  ", "  Analista IA  "
     ])
@@ -1038,7 +1056,6 @@ def pagina_chat(llm: ChatGroq) -> None:
         lucro = dados_df["lucro"].sum()
         margem = (lucro / fat * 100) if fat > 0 else 0.0
 
-        # ─── KPI Cards ────────────────────────────────────────────────────────
         st.markdown('<div class="section-label" style="margin-top:20px">Indicadores</div>',
                     unsafe_allow_html=True)
         st.markdown(
@@ -1067,7 +1084,6 @@ def pagina_chat(llm: ChatGroq) -> None:
             unsafe_allow_html=True,
         )
 
-        # ─── Waterfall ────────────────────────────────────────────────────────
         st.markdown('<div class="chart-card">'
                     '<div class="chart-title">Resumo Financeiro</div>'
                     '<div class="chart-subtitle">Fluxo de Faturamento → Lucro Líquido</div>',
@@ -1077,7 +1093,6 @@ def pagina_chat(llm: ChatGroq) -> None:
             st.plotly_chart(fig_wf, width="stretch", config={"displayModeBar": False}, key="chart_waterfall")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # ─── Linha e Donut ────────────────────────────────────────────────────
         col_g1, col_g2 = st.columns([3, 2])
 
         with col_g1:
@@ -1104,7 +1119,6 @@ def pagina_chat(llm: ChatGroq) -> None:
                 st.info("Sem despesas.")
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # ─── Barras mensais ───────────────────────────────────────────────────
         st.markdown('<div class="chart-card">'
                     '<div class="chart-title">Consolidado Mensal</div>'
                     '<div class="chart-subtitle">Barras agrupadas + linha de lucro (eixo secundário)</div>',
@@ -1147,7 +1161,6 @@ def pagina_chat(llm: ChatGroq) -> None:
         comp = comparar_periodos(df_a, df_b)
         a, b, delta = comp["periodo_a"], comp["periodo_b"], comp["delta"]
 
-        # Cards comparativos
         st.markdown(
             f"""
             <div class="compare-grid" style="margin-top:20px">
@@ -1188,7 +1201,6 @@ def pagina_chat(llm: ChatGroq) -> None:
             unsafe_allow_html=True,
         )
 
-        # Variação A vs B
         st.markdown(
             f"""
             <div class="chart-card" style="margin-top:20px">
@@ -1228,7 +1240,6 @@ def pagina_chat(llm: ChatGroq) -> None:
             st.plotly_chart(fig_comp, width="stretch", config={"displayModeBar": False}, key="chart_comparativo")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Área comparativa temporal
         if not df_a.empty and not df_b.empty:
             st.markdown('<div class="chart-card" style="margin-top:4px">'
                         '<div class="chart-title">Evolução — Período A</div>'
@@ -1252,10 +1263,8 @@ def pagina_chat(llm: ChatGroq) -> None:
     # TAB 3 — ANALISTA IA
     # ══════════════════════════════════════════════════════════════════════════
     with tab_chat:
-        # CSS local injetado dentro do contexto da aba — cobre input e avatar
         st.markdown("""
         <style>
-        /* Input branco -> dark */
         div[data-baseweb="base-input"],
         div[data-baseweb="textarea"],
         div[data-baseweb="base-input"] > div,
@@ -1269,14 +1278,10 @@ def pagina_chat(llm: ChatGroq) -> None:
             caret-color: #00e5a0 !important;
         }
         textarea::placeholder { color: #3d4f6e !important; }
-
-        /* Fundo do rodapé do input */
         .stChatInput, .stChatInput > div,
         [data-testid="stBottom"], [data-testid="stBottom"] > div {
             background-color: #0a0d14 !important;
         }
-
-        /* Avatar não sobrepõe texto */
         [data-testid="stChatMessage"] > div[class] {
             align-items: flex-start !important;
             gap: 14px !important;
@@ -1305,7 +1310,7 @@ def pagina_chat(llm: ChatGroq) -> None:
         )
         chain = _criar_chain(llm, dados_chat, chat_ini, chat_fim)
 
-        # ── Download de certidão pendente (salvo antes do rerun) ──────────────
+        # ── Download de certidão pendente ─────────────────────────────────────
         cert_pendente = st.session_state.pop("cert_pendente", None)
         if cert_pendente:
             with open(cert_pendente["path"], "rb") as f:
@@ -1335,7 +1340,6 @@ def pagina_chat(llm: ChatGroq) -> None:
         if not entrada_limpa:
             return
 
-        # Salva mensagem do usuário e rerun — o histórico acima renderiza tudo
         adicionar_mensagem("human", entrada_limpa)
 
         # Certidão?
@@ -1350,7 +1354,6 @@ def pagina_chat(llm: ChatGroq) -> None:
             }
             st.rerun()
 
-        # Resposta da IA — processa e salva, depois rerun para renderizar no histórico
         with st.spinner("Analisando..."):
             resposta_llm = consultar_modelo(chain, entrada_limpa)
         adicionar_mensagem("ai", resposta_llm)
