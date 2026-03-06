@@ -1,0 +1,37 @@
+data;faturamento;despesa;descricao;lucro
+06/01/2026;0,00;1700,00;Despesas Diversas;-1700,00
+07/01/2026;0,00;426,60;Despesas Diversas;-426,60
+08/01/2026;0,00;80,00;Despesas com Sócios;-80,00
+09/01/2026;1056,00;00,00;Receita de Vendas;1056,00
+09/01/2026;726,00;00,00;Receita de Vendas;726,00
+09/01/2026;676,00;00,00;Receita de Vendas;676,00
+12/01/2026;688,32;00,00;Receita de Vendas;688,32 
+12/01/2026;0,00;80,00;Despesas Diversas;-80,00
+12/01/2026;0,00;163,37;Impostos;-163,37
+12/01/2026;0,00;2500,00;Despesas com Sócios;-2500,00
+12/01/2026;0,00;81,40;Tarifas;-81,40
+14/01/2026;0,00;322,33;Despesas Diversas;-322,33    
+16/01/2026;2500,00;0,00;Receitas com Sócios;2500,00
+16/01/2026;0,00;2500,00;Despesas Diversas;-2500,00   
+16/01/2026;0,00;378,04;Despesas com Sócios;-378,04
+19/01/2026;2000,00;00,00;Receita de Vendas;2000,00 
+19/01/2026;500,00;0,00;Receitas com Sócios;500,00
+19/01/2026;1000,00;00,00;Receita de Vendas;1000,00 
+19/01/2026;2336,00;00,00;Receita de Vendas;2336,00 
+19/01/2026;0,00;1000,00;Despesas Diversas;-1000,00   
+19/01/2026;0,00;495,55;Despesas Diversas;-495,55 
+19/01/2026;0,00;1094,01;Despesas com Sócios;-1094,01
+20/01/2026;0,00;283,20;Despesas Diversas;-283,20 
+20/01/2026;0,00;104,95;Despesas Diversas;-104,95 
+20/01/2026;0,00;387,60;Despesas Diversas;-387,60 
+20/01/2026;0,00;74,00;Despesas Diversas;-74,00 
+20/01/2026;0,00;726,88;Despesas Diversas;-726,88 
+21/01/2026;0,00;322,33;Despesas Diversas;-322,33 
+22/01/2026;0,00;322,33;Despesas Diversas;-322,33 
+22/01/2026;0,00;322,33;Despesas Diversas;-322,33 
+22/01/2026;0,00;322,33;Despesas Diversas;-322,33 
+22/01/2026;0,00;189,24;Compesa;-189,24 
+23/01/2026;5112,00;00,00;Receita de Vendas;5112,00 
+23/01/2026;0,00;2319,85;Cesta Básica Brasil;-2319,85 
+23/01/2026;0,00;69,00;Despesas Diversas;-69,00 
+23/01/2026;0,00;130,53;Despesas com Energia;-130,53 
