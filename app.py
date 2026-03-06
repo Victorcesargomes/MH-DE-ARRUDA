@@ -323,15 +323,32 @@ html, body, [data-testid="stAppViewContainer"] {
     font-weight: 600 !important;
 }
 
-[data-testid="stChatInputContainer"] {
-    background: var(--bg-surface) !important;
-    border: 1px solid var(--border-light) !important;
+[data-testid="stChatInputContainer"],
+[data-testid="stChatInputContainer"] > div,
+[data-testid="stChatInputContainer"] > div > div {
+    background: #10141f !important;
+    border: 1px solid #253050 !important;
     border-radius: 12px !important;
 }
 [data-testid="stChatInputContainer"] textarea {
-    background: transparent !important;
-    color: var(--text-primary) !important;
+    background: #10141f !important;
+    color: #e8edf5 !important;
     font-family: 'DM Sans', sans-serif !important;
+    font-size: 0.92rem !important;
+}
+[data-testid="stChatInputContainer"] textarea::placeholder {
+    color: #3d4f6e !important;
+}
+
+/* Avatar — evita que o ícone sobreponha o texto */
+[data-testid="stChatMessageAvatarAssistant"],
+[data-testid="stChatMessageAvatarUser"] {
+    min-width: 36px !important;
+    min-height: 36px !important;
+    margin-right: 10px !important;
+}
+[data-testid="stChatMessage"] > div {
+    gap: 12px !important;
 }
 
 /* ─── Streamlit overrides ─── */
