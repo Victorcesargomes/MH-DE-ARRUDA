@@ -282,73 +282,61 @@ html, body, [data-testid="stAppViewContainer"] {
     padding: 24px;
     margin-top: 8px;
 }
-/* Mensagem do usuário */
-[data-testid="stChatMessage"][data-testid="stChatMessage"] {
-    background: transparent !important;
-    padding: 10px 4px !important;
+/* ── Mensagens ── */
+[data-testid="stChatMessage"] {
+    border-radius: 12px !important;
+    padding: 14px 18px !important;
+    margin: 6px 0 !important;
 }
-
-/* Balão da IA */
 [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
     background: #1a2035 !important;
     border: 1px solid #253050 !important;
-    border-radius: 12px !important;
-    padding: 14px 18px !important;
-    margin: 6px 0 !important;
 }
-
-/* Balão do usuário */
 [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
     background: #0f1e38 !important;
     border: 1px solid #1e3a5f !important;
-    border-radius: 12px !important;
-    padding: 14px 18px !important;
-    margin: 6px 0 !important;
 }
-
-/* Texto das mensagens — força cor clara */
 [data-testid="stChatMessage"] p,
 [data-testid="stChatMessage"] li,
-[data-testid="stChatMessage"] span,
-[data-testid="stChatMessage"] div {
+[data-testid="stChatMessage"] ol,
+[data-testid="stChatMessage"] ul,
+[data-testid="stChatMessage"] strong,
+[data-testid="stChatMessage"] em {
     color: #e8edf5 !important;
     font-family: 'DM Sans', sans-serif !important;
     font-size: 0.92rem !important;
     line-height: 1.65 !important;
 }
+[data-testid="stChatMessage"] strong { color: #ffffff !important; font-weight: 600 !important; }
 
-/* Negrito dentro das mensagens */
-[data-testid="stChatMessage"] strong {
-    color: #ffffff !important;
-    font-weight: 600 !important;
+/* ── Input do chat — cobre todos os wrappers internos ── */
+.stChatInputContainer,
+div.stChatInputContainer,
+div.stChatInputContainer > div,
+section[data-testid="stBottom"] > div,
+section[data-testid="stBottom"] textarea,
+section[data-testid="stBottom"] > div > div {
+    background-color: #10141f !important;
+    color: #e8edf5 !important;
 }
-
-[data-testid="stChatInputContainer"],
-[data-testid="stChatInputContainer"] > div,
-[data-testid="stChatInputContainer"] > div > div {
-    background: #10141f !important;
-    border: 1px solid #253050 !important;
-    border-radius: 12px !important;
+section[data-testid="stBottom"] {
+    background-color: #10141f !important;
+    border-top: 1px solid #1e2840 !important;
 }
-[data-testid="stChatInputContainer"] textarea {
-    background: #10141f !important;
+textarea[data-testid="stChatInputTextArea"],
+div[data-baseweb="textarea"] textarea,
+div[data-baseweb="base-input"] textarea {
+    background-color: #10141f !important;
     color: #e8edf5 !important;
     font-family: 'DM Sans', sans-serif !important;
     font-size: 0.92rem !important;
+    caret-color: #00e5a0 !important;
 }
-[data-testid="stChatInputContainer"] textarea::placeholder {
-    color: #3d4f6e !important;
-}
-
-/* Avatar — evita que o ícone sobreponha o texto */
-[data-testid="stChatMessageAvatarAssistant"],
-[data-testid="stChatMessageAvatarUser"] {
-    min-width: 36px !important;
-    min-height: 36px !important;
-    margin-right: 10px !important;
-}
-[data-testid="stChatMessage"] > div {
-    gap: 12px !important;
+div[data-baseweb="textarea"],
+div[data-baseweb="base-input"] {
+    background-color: #10141f !important;
+    border-color: #253050 !important;
+    border-radius: 12px !important;
 }
 
 /* ─── Streamlit overrides ─── */
@@ -1264,6 +1252,44 @@ def pagina_chat(llm: ChatGroq) -> None:
     # TAB 3 — ANALISTA IA
     # ══════════════════════════════════════════════════════════════════════════
     with tab_chat:
+        # CSS local injetado dentro do contexto da aba — cobre input e avatar
+        st.markdown("""
+        <style>
+        /* Input branco -> dark */
+        div[data-baseweb="base-input"],
+        div[data-baseweb="textarea"],
+        div[data-baseweb="base-input"] > div,
+        div[data-baseweb="textarea"] > div {
+            background-color: #10141f !important;
+            border-color: #253050 !important;
+        }
+        textarea, textarea:focus {
+            background-color: #10141f !important;
+            color: #e8edf5 !important;
+            caret-color: #00e5a0 !important;
+        }
+        textarea::placeholder { color: #3d4f6e !important; }
+
+        /* Fundo do rodapé do input */
+        .stChatInput, .stChatInput > div,
+        [data-testid="stBottom"], [data-testid="stBottom"] > div {
+            background-color: #0a0d14 !important;
+        }
+
+        /* Avatar não sobrepõe texto */
+        [data-testid="stChatMessage"] > div[class] {
+            align-items: flex-start !important;
+            gap: 14px !important;
+        }
+        [data-testid="stChatMessageAvatarAssistant"],
+        [data-testid="stChatMessageAvatarUser"] {
+            flex-shrink: 0 !important;
+            width: 36px !important;
+            height: 36px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
         st.markdown('<div class="section-label" style="margin-top:16px">Filtro de Contexto</div>',
                     unsafe_allow_html=True)
         c1, c2 = st.columns(2)
